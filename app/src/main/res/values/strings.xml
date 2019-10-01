@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">Music Sort Order</string>
+    <string name="failed_to_load_database">Failed to load database.</string>
+    <string name="update_database">Update database</string>
+    <string name="permission_deinied_upon_request">Permission denied upon request.</string>
+    <string name="request_file_access_reason">File access is required to extract sort tag from music files.</string>
+    <string name="dialog_btn_ok">OK</string>
+    <string name="stats_in_progress">Processing file %1$d/%2$d. %3$d files failed to load, %4$d missing titles, %5$d missing artists, %6$d missing albums.</string>
+    <string name="stats_finished">Processed all %2$d files. %3$d files failed to load, %4$d missing titles, %5$d missing artists, %6$d missing albums.</string>
+    <string name="introduction">Extract sort order key of title, artist and album from music files and apply to Android Media Storage database. Root permission and external storage access required.</string>
+</resources>
