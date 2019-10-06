@@ -233,10 +233,10 @@ class MainActivityViewModel : ViewModel() {
     }
 
     private fun loadDatabase(databaseFile: File): SQLiteDatabase? {
-        val databaseFile = copyDatabase(databaseFile) ?: return null
+        val database = copyDatabase(databaseFile) ?: return null
         val openParams = SQLiteDatabase.OpenParams.Builder().build()
 
-        return SQLiteDatabase.openDatabase(databaseFile, openParams)
+        return SQLiteDatabase.openDatabase(database, openParams)
     }
 
     private fun updateSortTags(databaseFile: File) {
@@ -294,7 +294,6 @@ class MainActivityViewModel : ViewModel() {
             cursor.close()
             database.close()
 
-            overwriteDatabase(databaseFile)
         } catch (e: Exception) {
             Log.e(TAG, "Error while updating sort tags", e)
             hasError.postValue(true)
