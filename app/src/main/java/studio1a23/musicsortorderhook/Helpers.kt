@@ -1,6 +1,7 @@
 package studio1a23.musicsortorderhook
 
 import android.content.ContentValues
+import android.database.sqlite.SQLiteConstraintException
 import android.database.sqlite.SQLiteDatabase
 import android.provider.MediaStore
 import android.util.Log
@@ -11,6 +12,7 @@ import java.io.File
 import androidx.annotation.MainThread
 import androidx.annotation.Nullable
 import androidx.lifecycle.*
+import java.lang.Exception
 import java.util.concurrent.atomic.AtomicBoolean
 
 
@@ -70,16 +72,28 @@ fun updateDatabase(db: SQLiteDatabase, id: Int,
             val updateAlbum = ContentValues().apply {
                 put("album_key", collatedAlbum)
             }
-            db.update("albums", updateAlbum, "album_id = ?", arrayOf(id.toString()))
-            feedback.album = true
+            try {
+                db.update("albums", updateAlbum, "album_id = ?", arrayOf(albumId.toString()))
+                feedback.album = true
+            } catch (e: SQLiteConstraintException) {
+                Log.e(TAG, "Error on updating album key: unique constraint [${sortKeys.album}]")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error on updating album key", e)
+            }
         }
         if (artistId != null && sortKeys.artist != null) {
             val collatedArtist = MediaStore.Audio.keyFor(sortKeys.artist)
             val updateArtist = ContentValues().apply {
                 put("artist_key", collatedArtist)
             }
-            db.update("artists", updateArtist, "artist_id = ?", arrayOf(id.toString()))
-            feedback.artist = true
+            try {
+                db.update("artists", updateArtist, "artist_id = ?", arrayOf(artistId.toString()))
+                feedback.artist = true
+            } catch (e: SQLiteConstraintException) {
+                Log.e(TAG, "Error on updating artist key: unique constraint [${sortKeys.artist}]")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error on updating artist key", e)
+            }
         }
         db.setTransactionSuccessful()
     } finally {
