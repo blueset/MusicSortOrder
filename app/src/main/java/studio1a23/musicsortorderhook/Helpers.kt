@@ -3,6 +3,7 @@ package studio1a23.musicsortorderhook
 import android.content.ContentValues
 import android.database.sqlite.SQLiteConstraintException
 import android.database.sqlite.SQLiteDatabase
+import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
 import org.jaudiotagger.audio.AudioFileIO
@@ -12,6 +13,7 @@ import java.io.File
 import androidx.annotation.MainThread
 import androidx.annotation.Nullable
 import androidx.lifecycle.*
+import org.jaudiotagger.audio.exceptions.InvalidAudioFrameException
 import java.lang.Exception
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -24,7 +26,7 @@ fun loadSortKeys(path: String): SortKeys? {
     try {
         val file = File(path)
         val audioFile = AudioFileIO.read(file)
-        val tag = audioFile.tag
+        val tag = audioFile.tag ?: return null
         var titleKey: String? = tag.getFirst(FieldKey.TITLE_SORT)
         var artistKey: String? = tag.getFirst(FieldKey.ARTIST_SORT)
         if (artistKey?.isBlank() == true) {
@@ -46,6 +48,8 @@ fun loadSortKeys(path: String): SortKeys? {
         return SortKeys(title = titleKey, artist = artistKey, album = albumKey)
     } catch (e: CannotReadException) {
         return null
+    } catch (e: InvalidAudioFrameException) {
+        return null
     }
 }
 
@@ -60,6 +64,8 @@ fun updateDatabase(db: SQLiteDatabase, id: Int,
     val feedback = UpdateDatabaseFeedback()
     try {
         if (sortKeys.title != null) {
+            // You yourself are still using this deprecated method, so don’t blame me.
+            // Ref: https://cs.android.com/android/platform/superproject/+/master:packages/providers/MediaProvider/src/com/android/providers/media/MediaProvider.java;l=1207?q=artist_key%20keyfor
             val collatedTitle = MediaStore.Audio.keyFor(sortKeys.title)
             val updateTitle = ContentValues().apply {
                 put("title_key", collatedTitle)
@@ -68,12 +74,18 @@ fun updateDatabase(db: SQLiteDatabase, id: Int,
             feedback.title = true
         }
         if (albumId != null && sortKeys.album != null) {
+            // You yourself are still using this deprecated method, so don’t blame me.
+            // Ref: https://cs.android.com/android/platform/superproject/+/master:packages/providers/MediaProvider/src/com/android/providers/media/MediaProvider.java;l=1207?q=artist_key%20keyfor
             val collatedAlbum = MediaStore.Audio.keyFor(sortKeys.album)
             val updateAlbum = ContentValues().apply {
                 put("album_key", collatedAlbum)
             }
             try {
-                db.update("albums", updateAlbum, "album_id = ?", arrayOf(albumId.toString()))
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    db.update("files", updateAlbum, "_id = ?", arrayOf(id.toString()))
+                } else {
+                    db.update("albums", updateAlbum, "album_id = ?", arrayOf(albumId.toString()))
+                }
                 feedback.album = true
             } catch (e: SQLiteConstraintException) {
                 Log.e(TAG, "Error on updating album key: unique constraint [${sortKeys.album}]")
@@ -82,12 +94,18 @@ fun updateDatabase(db: SQLiteDatabase, id: Int,
             }
         }
         if (artistId != null && sortKeys.artist != null) {
+            // You yourself are still using this deprecated method, so don’t blame me.
+            // Ref: https://cs.android.com/android/platform/superproject/+/master:packages/providers/MediaProvider/src/com/android/providers/media/MediaProvider.java;l=1207?q=artist_key%20keyfor
             val collatedArtist = MediaStore.Audio.keyFor(sortKeys.artist)
             val updateArtist = ContentValues().apply {
                 put("artist_key", collatedArtist)
             }
             try {
-                db.update("artists", updateArtist, "artist_id = ?", arrayOf(artistId.toString()))
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    db.update("files", updateArtist, "_id = ?", arrayOf(id.toString()))
+                } else {
+                    db.update("artists", updateArtist, "artist_id = ?", arrayOf(artistId.toString()))
+                }
                 feedback.artist = true
             } catch (e: SQLiteConstraintException) {
                 Log.e(TAG, "Error on updating artist key: unique constraint [${sortKeys.artist}]")
@@ -126,7 +144,7 @@ class SingleLiveEvent<T> : MutableLiveData<T>() {
         }
 
         // Observe the internal MutableLiveData
-        super.observe(owner, Observer<T> { t ->
+        super.observe(owner, { t ->
             if (mPending.compareAndSet(true, false)) {
                 observer.onChanged(t)
             }
@@ -144,11 +162,11 @@ class SingleLiveEvent<T> : MutableLiveData<T>() {
      */
     @MainThread
     fun call() {
-        setValue(null)
+        value = null
     }
 
     companion object {
 
-        private val TAG = "SingleLiveEvent"
+        private const val TAG = "SingleLiveEvent"
     }
 }

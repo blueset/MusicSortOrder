@@ -23,16 +23,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <meta-data
-            android:name="xposedmodule"
-            android:value="false" />
-        <meta-data
-            android:name="xposeddescription"
-            android:value="Add support to TSOT, TSOA, and TSOP to Android Media Storage." />
-        <meta-data
-            android:name="xposedminversion"
-            android:value="53" />
     </application>
 
 </manifest>

@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.database.sqlite.SQLiteDatabase
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.View
@@ -39,10 +40,12 @@ class MainActivity : AppCompatActivity() {
     companion object {
         const val TAG = "MAIN_ACTIVITY"
         const val MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE = 1
+
         init {
-            Shell.Config.setFlags(Shell.FLAG_REDIRECT_STDERR)
-            Shell.Config.verboseLogging(BuildConfig.DEBUG)
-            Shell.Config.setTimeout(10)
+            Shell.enableVerboseLogging = BuildConfig.DEBUG
+            Shell.setDefaultBuilder(Shell.Builder.create()
+                .setFlags(Shell.FLAG_REDIRECT_STDERR)
+                .setTimeout(10))
         }
     }
 
@@ -63,7 +66,7 @@ class MainActivity : AppCompatActivity() {
 
 
 
-        viewModel.isRunning.observe(this, Observer {
+        viewModel.isRunning.observe(this, {
             updateDatabaseButton.isEnabled = !it
             if (it) {
                 statusText.text = ""
@@ -72,7 +75,7 @@ class MainActivity : AppCompatActivity() {
         })
 
 
-        viewModel.totalFiles.observe(this, Observer {
+        viewModel.totalFiles.observe(this, {
             GlobalScope.launch(Dispatchers.Main) {
                 progressBar.max = it
             }
@@ -107,7 +110,7 @@ class MainActivity : AppCompatActivity() {
         viewModel.missingAlbum.observe(this, updateStatsObserver)
         viewModel.missingArtist.observe(this, updateStatsObserver)
 
-        viewModel.errorMessage.observe(this, Observer {
+        viewModel.errorMessage.observe(this, {
             if (it != 0) {
                 Snackbar.make(activityMainContainer, it, Snackbar.LENGTH_LONG).show()
             }
@@ -115,8 +118,10 @@ class MainActivity : AppCompatActivity() {
 
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int,
-                                            permissions: Array<String>, grantResults: IntArray) {
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>, grantResults: IntArray
+    ) {
         when (requestCode) {
             MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE -> {
                 // If request is cancelled, the result arrays are empty.
@@ -142,18 +147,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    @Suppress("UNUSED_PARAMETER")
     fun onClickUpdateDatabase(view: View) {
         if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
-            != PackageManager.PERMISSION_GRANTED) {
+            != PackageManager.PERMISSION_GRANTED
+        ) {
 
             // Should we show an explanation?
             if (shouldShowRequestPermissionRationale(
-                    Manifest.permission.READ_EXTERNAL_STORAGE)) {
+                    Manifest.permission.READ_EXTERNAL_STORAGE
+                )
+            ) {
                 rationaleDialog.show()
             }
 
-            requestPermissions(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE),
-                MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE)
+            requestPermissions(
+                arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE),
+                MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE
+            )
 
             return
         } else {
@@ -171,8 +182,8 @@ class MainActivity : AppCompatActivity() {
 
 class MainActivityViewModel : ViewModel() {
 
-    val isRunning = MutableLiveData<Boolean>(false)
-    val hasError = MutableLiveData<Boolean>(false)
+    val isRunning = MutableLiveData(false)
+    val hasError = MutableLiveData(false)
     val totalFiles = MutableLiveData(0)
     val processedFiles = MutableLiveData(0)
     val loadFailed = MutableLiveData(0)
@@ -182,29 +193,45 @@ class MainActivityViewModel : ViewModel() {
     val errorMessage = SingleLiveEvent<Int>()
 
     companion object {
-        const val MEDIA_STORAGE_DATABASE = "/data/data/com.android.providers.media/databases/external.db"
+        const val MEDIA_STORAGE_DATABASE =
+            "/data/data/com.android.providers.media/databases/external.db"
+        const val MEDIA_STORAGE_DATABASE_R =
+            "/data/data/com.google.android.providers.media.module/databases/external.db"
     }
 
     /**
      * Copy database to app directory.
      */
     private fun copyDatabase(databaseFile: File): File? {
-        val database = SuFile.open(MEDIA_STORAGE_DATABASE)
+        val database = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            SuFile.open(MEDIA_STORAGE_DATABASE_R)
+        } else {
+            SuFile.open(MEDIA_STORAGE_DATABASE)
+        }
 
         if (database.exists()) {
             try {
                 Log.d(MainActivity.TAG, "Database path: ${databaseFile.absolutePath}")
                 SuFileInputStream(database).use { inFile ->
-                    SuFileOutputStream(databaseFile.path).use { outFile ->
-                        ShellUtils.pump(inFile, outFile)
+                    SuFileOutputStream(databaseFile.absolutePath).use { outFile ->
+                        inFile.copyTo(outFile)
                     }
                 }
+
+                val dbf = SuFile.open(databaseFile.absolutePath)
+                Log.d(
+                    MainActivity.TAG,
+                    "Size of new file after copy: sufile = ${dbf.length()}; passed in = ${databaseFile.length()}; original = ${database.length()}"
+                )
+
                 return databaseFile
             } catch (e: IOException) {
                 e.printStackTrace()
             }
-
+        } else {
+            Log.d(MainActivity.TAG, "${database.absolutePath} does not exist.")
         }
+
         return null
     }
 
@@ -213,22 +240,31 @@ class MainActivityViewModel : ViewModel() {
      */
     private fun overwriteDatabase(databaseFile: File) {
         viewModelScope.launch {
-            val database =
+            val database = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                SuFile.open(MEDIA_STORAGE_DATABASE_R)
+            } else {
                 SuFile.open(MEDIA_STORAGE_DATABASE)
+            }
+
+            val currentUser = ShellUtils.fastCmd("stat -c '%U' ${database.absolutePath}")
+            val currentGroup = ShellUtils.fastCmd("stat -c '%G' ${database.absolutePath}")
+            val currentPermission = ShellUtils.fastCmd("stat -c '%a' ${database.absolutePath}")
 
             if (database.exists()) {
                 try {
                     Log.d(MainActivity.TAG, "Database path: ${databaseFile.absolutePath}")
                     SuFileInputStream(databaseFile.path).use { inFile ->
                         SuFileOutputStream(database).use { outFile ->
-                            ShellUtils.pump(inFile, outFile)
+                            inFile.copyTo(outFile)
                         }
                     }
                 } catch (e: IOException) {
                     e.printStackTrace()
                 }
-
             }
+
+            ShellUtils.fastCmd("chmod $currentPermission ${database.absolutePath}")
+            ShellUtils.fastCmd("chown $currentUser:$currentGroup ${database.absolutePath}")
         }
     }
 
@@ -236,7 +272,18 @@ class MainActivityViewModel : ViewModel() {
         val database = copyDatabase(databaseFile) ?: return null
         val openParams = SQLiteDatabase.OpenParams.Builder().build()
 
-        return SQLiteDatabase.openDatabase(database, openParams)
+        val db = SQLiteDatabase.openDatabase(database, openParams)
+
+        // Add dummy functions used in Android 11
+        // Ref: https://cs.android.com/android/platform/superproject/+/master:packages/providers/MediaProvider/src/com/android/providers/media/DatabaseHelper.java;l=271;bpv=1;bpt=1?q=files_insert
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            db.setCustomScalarFunction("_UPDATE") {
+                null
+            }
+        }
+
+        return db
     }
 
     private fun updateSortTags(databaseFile: File) {
@@ -300,13 +347,12 @@ class MainActivityViewModel : ViewModel() {
         } finally {
             isRunning.postValue(false)
         }
-
-
     }
 
     fun batchUpdateDatabase(databaseFile: File) {
         GlobalScope.launch(Dispatchers.IO) {
             updateSortTags(databaseFile)
+            Log.d(MainActivity.TAG, "Database path: ${databaseFile.absolutePath}")
             overwriteDatabase(databaseFile)
         }
     }

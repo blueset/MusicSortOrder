@@ -19,7 +19,13 @@ and update respective values (`title_key`, `album_key`, `artist_key`) with that 
 music file using root permission.
 
 ## Note
-This app was initially designed as an Xposed hook, but later changed to the root strategy. You
-might see the app as Xposed Module installed, but currently it does nothing useful and you can
-simply ignore the Xposed part.
+This app was initially designed as an Xposed hook, but later changed to the root strategy.
+~~You might see the app as Xposed Module installed, but currently it does nothing useful and you can
+simply ignore the Xposed part.~~
 
+## Changelog
+### 1.1
+Add support to Android 11 (R).
+
+### 1.0
+First release
